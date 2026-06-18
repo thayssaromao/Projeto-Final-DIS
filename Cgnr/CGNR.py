@@ -2,6 +2,7 @@ import numpy as np
 import time
 from PIL import Image
 import os
+import matplotlib.pyplot as plt
 
 def transformar_g_em_vetor_coluna(g):
     return np.asarray(g, dtype=np.float64).reshape(-1, 1)
@@ -143,18 +144,62 @@ def cgnr(H, g, tol=1e-4, max_iter=10):
         "lambda": lamb
     }
 
-def salvar_imagem(f, resolucao, nome_arquivo):
+def preparar_imagem(f, resolucao, limiar=0.08):
     img = np.asarray(f, dtype=np.float64).reshape((resolucao, resolucao), order="F")
 
-    # Remove valores negativos pequenos
+    # Remove valores negativos
     img = np.maximum(img, 0)
 
     # Normaliza entre 0 e 1
     if np.max(img) != 0:
         img = img / np.max(img)
 
-    # Corta ruído fraco do fundo
-    img[img < 0.15] = 0
+    # Remove ruído fraco do fundo
+    img[img < limiar] = 0
+
+    return img
+
+
+def salvar_imagem(f, resolucao, nome_arquivo, limiar=0.08, contraste=2.0, distancia_minima=3):
+    img = np.asarray(f, dtype=np.float64).reshape((resolucao, resolucao), order="F")
+
+    img = np.maximum(img, 0)
+
+    if np.max(img) != 0:
+        img = img / np.max(img)
+
+    # Escurece sinais fracos sem apagar tudo de cara
+    img = img ** contraste
+
+    # Remove apenas ruído muito baixo
+    img[img < limiar] = 0
+
+    candidatos = np.argwhere(img > 0)
+
+    candidatos = sorted(
+        candidatos,
+        key=lambda pos: img[pos[0], pos[1]],
+        reverse=True
+    )
+
+    img_limpa = np.zeros_like(img)
+    pontos_mantidos = []
+
+    for i, j in candidatos:
+        muito_perto = False
+
+        for pi, pj in pontos_mantidos:
+            distancia = np.sqrt((i - pi) ** 2 + (j - pj) ** 2)
+
+            if distancia < distancia_minima:
+                muito_perto = True
+                break
+
+        if not muito_perto:
+            img_limpa[i, j] = img[i, j]
+            pontos_mantidos.append((i, j))
+
+    img = img_limpa
 
     img = (img * 255).astype(np.uint8)
 
@@ -202,10 +247,10 @@ def carregar_csv(nome_arquivo):
 
 if __name__ == "__main__":
     print("Carregando H...")
-    H = carregar_csv("H-1.csv")
+    H = carregar_csv("sinais/H-1.csv")
 
     print("Carregando g...")
-    g = carregar_csv("G-1.csv")
+    g = carregar_csv("sinais/G-2.csv")
 
     print("Descobrindo resolução...")
     resolucao = descobrir_resolucao(H)
@@ -228,8 +273,16 @@ if __name__ == "__main__":
     f = resultado["f"]
 
     nome_imagem = f"imagem_reconstruida_{resolucao}x{resolucao}.png"
+    nome_grafico = f"grafico_reconstrucao_{resolucao}x{resolucao}.png"
 
-    salvar_imagem(f, resolucao, nome_imagem)
+    salvar_imagem(
+        f,
+        resolucao,
+        nome_imagem,
+        limiar=0.05,
+        contraste=2.0,
+        distancia_minima=3
+    )
 
     print("Tempo:", resultado["tempo"])
     print("Iterações:", resultado["iteracoes"])
