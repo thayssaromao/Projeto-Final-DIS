@@ -2,7 +2,7 @@ import numpy as np
 import time
 from PIL import Image
 import os
-import matplotlib.pyplot as plt
+from MonitorRecursos import MonitorRecursos
 
 def transformar_g_em_vetor_coluna(g):
     return np.asarray(g, dtype=np.float64).reshape(-1, 1)
@@ -246,6 +246,10 @@ def carregar_csv(nome_arquivo):
     return dados
 
 if __name__ == "__main__":
+
+    monitor = MonitorRecursos()
+    monitor.iniciar()
+
     print("Carregando H...")
     H = carregar_csv("sinais/H-1.csv")
 
@@ -284,10 +288,15 @@ if __name__ == "__main__":
         distancia_minima=3
     )
 
+    recursos = monitor.parar()
+
     print("Tempo:", resultado["tempo"])
     print("Iterações:", resultado["iteracoes"])
     print("Erro:", resultado["erro"])
     print("Fator de redução c:", resultado["fator_reducao"])
     print("Lambda:", resultado["lambda"])
+    print("Memória máxima MB:", recursos["memoria_max_mb"])
+    print("CPU média do processo %:", recursos["cpu_processo_media"])
+    print("CPU média do sistema %:", recursos["cpu_sistema_media"])
 
     print("Finalizado.")
