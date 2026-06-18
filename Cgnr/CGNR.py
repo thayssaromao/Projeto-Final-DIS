@@ -45,7 +45,7 @@ def aplicar_ganho(g):
 
     return g
 
-def cgnr(H, g, tol=1e-4, max_iter=10):
+def cgnr(H, g, c=None, tol=1e-4, max_iter=10):
 
     print("Iniciando CGNR...")
     inicio = time.time()
@@ -67,9 +67,12 @@ def cgnr(H, g, tol=1e-4, max_iter=10):
             f"mas g tem {g.shape[0]} linhas."
         )
 
-    print("Calculando fator de redução c...")
-    c = calcular_fator_reducao(H)
-    print("Fator de redução calculado.")
+    if c is None:
+        print("Calculando fator de redução c...")
+        c = calcular_fator_reducao(H)
+        print("Fator de redução calculado.")
+    else:
+        print("Usando fator de redução c já carregado.")
 
     print("Calculando lambda...")
     lamb = calcular_coeficiente_regularizacao(H, g)
@@ -245,13 +248,40 @@ def carregar_csv(nome_arquivo):
 
     return dados
 
+MODELOS = {
+    60: {
+        "arquivo_H": "sinais/H-1.csv",
+        "arquivo_c": "cache/c_60.npy"
+    },
+    30: {
+        "arquivo_H": "sinais/H-2.csv",
+        "arquivo_c": "cache/c_30.npy"
+    }
+}
+def carregar_modelo(resolucao):
+    config = MODELOS[resolucao]
+
+    H = carregar_csv(config["arquivo_H"])
+
+    if os.path.exists(config["arquivo_c"]):
+        print(f"existe o arquivo H")
+        c = np.load(config["arquivo_c"])
+        c = float(c)
+    else:
+        c = calcular_fator_reducao(H)
+        os.makedirs("cache", exist_ok=True)
+        np.save(config["arquivo_c"], c)
+
+    return H, c
 if __name__ == "__main__":
 
     monitor = MonitorRecursos()
     monitor.iniciar()
 
     print("Carregando H...")
-    H = carregar_csv("sinais/H-1.csv")
+    resolucao_desejada = 60
+
+    H, c_salvo = carregar_modelo(resolucao_desejada)
 
     print("Carregando g...")
     g = carregar_csv("sinais/G-2.csv")
@@ -270,7 +300,7 @@ if __name__ == "__main__":
     g_vetor = transformar_g_em_vetor_coluna(g_com_ganho)
 
     print("Rodando CGNR...")
-    resultado = cgnr(H, g_vetor)
+    resultado = cgnr(H, g_vetor, c=c_salvo)
 
     print("Salvando imagens de teste...")
 
