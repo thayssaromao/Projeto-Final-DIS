@@ -267,11 +267,11 @@ if __name__ == "__main__":
     print("Carregando H e g...")
 
     if resolucao_desejada == 60:
-        H = carregar_matriz_esparsa("sinais/H-1.csv")
-        g = carregar_csv("sinais/G-1.csv")
+        H = carregar_matriz_esparsa("Cgnr/sinais/H-1.csv")
+        g = carregar_csv("Cgnr/sinais/G-1.csv")
     elif resolucao_desejada == 30:
-        H = carregar_matriz_esparsa("sinais/H-2.csv")
-        g = carregar_csv("sinais/G-1.csv")
+        H = carregar_matriz_esparsa("Cgnr/sinais/H-2.csv")
+        g = carregar_csv("Cgnr/sinais/G-1.csv")
     else:
         raise ValueError("Resolução inválida. Use 30 ou 60.")
 

@@ -591,7 +591,144 @@ void salvar_imagem(const double *f, int resolucao, const char *nome_arquivo) {
         exit(1);
     }
 }
+static double *carregar_sinal_da_string(const char *sinal_data, int *tamanho) {
+    char *copia = (char *)malloc(strlen(sinal_data) + 1);
 
+    if (!copia) {
+        fprintf(stderr, "Erro de memoria ao copiar sinal recebido.\n");
+        return NULL;
+    }
+
+    strcpy(copia, sinal_data);
+
+    int capacidade = 1024;
+    int n = 0;
+    double *dados = (double *)malloc(sizeof(double) * capacidade);
+
+    if (!dados) {
+        fprintf(stderr, "Erro de memoria ao criar vetor g.\n");
+        free(copia);
+        return NULL;
+    }
+
+    char *token = strtok(copia, ",;\n\r");
+
+    while (token != NULL) {
+        if (strlen(token) > 0) {
+            if (n >= capacidade) {
+                capacidade *= 2;
+                double *novo = (double *)realloc(dados, sizeof(double) * capacidade);
+
+                if (!novo) {
+                    fprintf(stderr, "Erro de memoria ao expandir vetor g.\n");
+                    free(dados);
+                    free(copia);
+                    return NULL;
+                }
+
+                dados = novo;
+            }
+
+            dados[n++] = atof(token);
+        }
+
+        token = strtok(NULL, ",;\n\r");
+    }
+
+    free(copia);
+
+    *tamanho = n;
+    return dados;
+}
+
+int reconstruir_por_socket(
+    const char *modelo,
+    const char *ganho,
+    const char *sinal_data,
+    char *resposta,
+    size_t tamanho_resposta
+) {
+    const char *arquivo_H;
+
+    if (strstr(modelo, "30") != NULL) {
+        arquivo_H = "../sinais/H-2.csv";
+    } else {
+        arquivo_H = "../sinais/H-1.csv";
+    }
+
+    printf("[ALGORITMO] Modelo recebido: %s\n", modelo);
+    printf("[ALGORITMO] Ganho recebido: %s\n", ganho);
+    printf("[ALGORITMO] Carregando H: %s\n", arquivo_H);
+
+    MatrizEsparsa *H = carregar_matriz_esparsa(arquivo_H);
+
+    int tamanho_g = 0;
+    double *g = carregar_sinal_da_string(sinal_data, &tamanho_g);
+
+    if (!g) {
+        snprintf(resposta, tamanho_resposta, "ERRO|falha_ao_converter_sinal");
+        liberar_matriz(H);
+        return 1;
+    }
+
+    if (H->linhas != tamanho_g) {
+        snprintf(
+            resposta,
+            tamanho_resposta,
+            "ERRO|dimensoes_incompativeis;H_linhas=%d;g_tamanho=%d",
+            H->linhas,
+            tamanho_g
+        );
+
+        free(g);
+        liberar_matriz(H);
+        return 1;
+    }
+
+    int resolucao = descobrir_resolucao(H);
+
+    double inicio_total = tempo_atual();
+
+    Resultado resultado = executar_algoritmo_aleatorio(H, g);
+
+    double fim_total = tempo_atual();
+
+    char nome_imagem[256];
+
+    snprintf(
+        nome_imagem,
+        sizeof(nome_imagem),
+        "imagem_socket_%ld_%dx%d_%s.png",
+        time(NULL),
+        resolucao,
+        resolucao,
+        resultado.algoritmo
+    );
+
+    salvar_imagem(resultado.f, resolucao, nome_imagem);
+
+    snprintf(
+        resposta,
+        tamanho_resposta,
+        "OK|algoritmo=%s;modelo=%s;ganho=%s;imagem=%s;tempo_algoritmo=%.6f;tempo_total=%.6f;iteracoes=%d;erro=%.12f;lambda=%.12f",
+        resultado.algoritmo,
+        modelo,
+        ganho,
+        nome_imagem,
+        resultado.tempo,
+        fim_total - inicio_total,
+        resultado.iteracoes,
+        resultado.erro,
+        resultado.lambda
+    );
+
+    free(resultado.f);
+    free(g);
+    liberar_matriz(H);
+
+    return 0;
+}
+#ifdef TESTE_ALGORITMO
 int main(void) {
     srand((unsigned int)time(NULL));
 
@@ -658,3 +795,4 @@ int main(void) {
 
     return 0;
 }
+#endif
