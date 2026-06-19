@@ -1,3 +1,9 @@
+# Inicialização Global: Carrega os arquivos pesados de matrizes apenas uma vez na memória 
+# para que as threads compartilhem esses dados sem redundância.
+# Thread Principal (Produtora): Escuta a porta 8000, aceita conexões de rede,
+#  lê os dados enviados pelo cliente, empacota-os em uma tarefa e os coloca na fila.
+# Threads Trabalhadoras (Consumidoras): Um grupo limitado de até 3 threads pega 
+# as tarefas da fila e executa o algoritmo matemático pesado (CGNR/CGNE).
 import socket
 import numpy as np
 import queue
@@ -146,11 +152,9 @@ def iniciarServidor():
                     "sinal_data": sinal_data
                 }
                 
-                # Coloca a tarefa na fila de execução
-                fila_de_tarefas.put(tarefa)
+                fila_de_tarefas.put(tarefa) # Coloca a tarefa na fila de execução
                 
-                # Descobre a posição atual do cliente na fila
-                posicao_fila = fila_de_tarefas.qsize()
+                posicao_fila = fila_de_tarefas.qsize() # Descobre a posição atual do cliente na fila
                 
                 print(f"[+] Tarefa #{contador_tarefas} adicionada à fila. Posição atual: {posicao_fila}")
                 
