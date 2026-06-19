@@ -5,6 +5,7 @@ from PIL import Image
 import os
 import scipy.sparse as sp
 
+
 def carregar_matriz_esparsa(nome_arquivo):
     cache = nome_arquivo + ".npz"
 
@@ -58,20 +59,6 @@ def calcular_coeficiente_regularizacao(H, g):
 
     return np.max(np.abs(Htg)) * 0.10
 
-def aplicar_ganho(g):
-    g = np.asarray(g, dtype=np.float64).copy()
-
-    if g.ndim == 1:
-        g = g.reshape(-1, 1)
-
-    S, N = g.shape
-
-    for c in range(N):
-        for l in range(S):
-            gamma = 100 + (1 / 20) * np.sqrt((l + 1) * (l + 1))
-            g[l, c] = g[l, c] * gamma
-
-    return g
 
 def cgnr(H, g, tol=1e-4, max_iter=10):
     inicio = time.time()
@@ -100,10 +87,6 @@ def cgnr(H, g, tol=1e-4, max_iter=10):
     for i in range(max_iter):
         iteracoes = i + 1
 
-        # ALTERAÇÃO 1:
-        # guarda a norma do resíduo antes da atualização
-        norma_r_anterior = np.linalg.norm(r)
-
         w = H @ p
         norm_w_sq = float(w @ w)
 
@@ -115,9 +98,7 @@ def cgnr(H, g, tol=1e-4, max_iter=10):
         f = f + alpha * p
         r = r - alpha * w
 
-        
-        norma_r_atual = np.linalg.norm(r)
-        erro = abs(norma_r_atual - norma_r_anterior)
+        erro = np.linalg.norm(r)
 
         if erro < tol:
             break
@@ -169,8 +150,6 @@ def cgne(H, g, tol=1e-4, max_iter=10):
     for i in range(max_iter):
         iteracoes = i + 1
 
-        norma_r_anterior = np.linalg.norm(r)
-
         norm_r_sq = float(r @ r)
         norm_p_sq = float(p @ p)
 
@@ -184,8 +163,7 @@ def cgne(H, g, tol=1e-4, max_iter=10):
         Hp = H @ p
         r = r - alpha * Hp
 
-        norma_r_atual = np.linalg.norm(r)
-        erro = abs(norma_r_atual - norma_r_anterior)
+        erro = np.linalg.norm(r)
 
         if erro < tol:
             break
@@ -289,11 +267,11 @@ if __name__ == "__main__":
     print("Carregando H e g...")
 
     if resolucao_desejada == 60:
-        H = carregar_matriz_esparsa("sinais/H-1.csv")
-        g = carregar_csv("sinais/G-1.csv")
+        H = carregar_matriz_esparsa("Cgnr/sinais/H-1.csv")
+        g = carregar_csv("Cgnr/sinais/G-1.csv")
     elif resolucao_desejada == 30:
-        H = carregar_matriz_esparsa("sinais/H-2.csv")
-        g = carregar_csv("sinais/G-1.csv")
+        H = carregar_matriz_esparsa("Cgnr/sinais/H-2.csv")
+        g = carregar_csv("Cgnr/sinais/G-1.csv")
     else:
         raise ValueError("Resolução inválida. Use 30 ou 60.")
 
