@@ -11,10 +11,10 @@ import time
 import os
 import psutil
 from concurrent.futures import ThreadPoolExecutor
+import matplotlib.pyplot as plt
 
 from AlgoritmoReconstrucao import (
     carregar_matriz_esparsa,
-    aplicar_ganho,
     executar_algoritmo_aleatorio,
     descobrir_resolucao,
     salvar_imagem
@@ -22,20 +22,57 @@ from AlgoritmoReconstrucao import (
 
 HOST = '127.0.0.1'
 PORTA = 8000
-MAX_TRABALHADORES = 3  # Limite estrito de 3 threads calculando CGNR simultaneamente
+MAX_TRABALHADORES = 4  # Limite estrito de 4 threads calculando CGNR simultaneamente
+LIMITE_CPU = 95.0
 
-# Fila thread-safe para armazenar as requisições dos clientes
-fila_de_tarefas = queue.Queue()
+historico_requisicoes = []
+historico_cpu = []
 
 print("[*] Inicializando o Servidor: Carregando matrizes de modelo esparsas...")
+
 try:
-    # Ajuste os caminhos se os arquivos estiverem em outra pasta
-    H_60 = carregar_matriz_esparsa("Cgnr/sinais/H-1.csv") # Modelo para 60x60
-    H_30 = carregar_matriz_esparsa("Cgnr/sinais/H-2.csv") # Modelo para 30x30
+    H_60 = carregar_matriz_esparsa("Cgnr/sinais/H-1.csv") 
+    H_30 = carregar_matriz_esparsa("Cgnr/sinais/H-2.csv")
     print("[*] Matrizes de modelo carregadas com sucesso de forma global!")
 except Exception as e:
     print(f"[!] Erro crítico ao carregar modelos físicos: {e}")
     exit(1)
+
+def gerar_grafico_desempenho():
+    if not historico_requisicoes:
+        print("[*] Nenhuma requisição registrada para gerar gráfico.")
+        return
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(historico_requisicoes, historico_cpu, marker='o', color='b', linestyle='-', linewidth=1.5, label='Uso de CPU (%)')
+    
+    plt.axhline(y=95.0, color='r', linestyle='--', alpha=0.7, label='Limite de Saturação (95%)')
+    
+    plt.title('Desempenho da CPU em Função das Requisições Gerais')
+    plt.xlabel('ID da Requisição (Ordem de Chegada)')
+    plt.ylabel('Uso da CPU (%)')
+    plt.ylim(0, 105)
+    plt.grid(True, linestyle=':', alpha=0.6)
+    plt.legend()
+    
+    nome_grafico = "desempenho_cpu_requisicoes.png"
+    plt.savefig(nome_grafico, dpi=300, bbox_inches='tight')
+    print(f"\n[+] Gráfico de desempenho salvo com sucesso como '{nome_grafico}'!")
+
+def aplicar_ganho_sinal(g_dados):
+    S, N = g_dados.shape
+    print(f"[PROCESSADOR] Aplicando ganho de sinal na matriz de dimensões: {S}x{N}")
+    
+    # Criamos um array para 'l' variando de 1 até S (1-indexado conforme a fórmula)
+    l_indices = np.arange(1, S + 1).reshape(S, 1)  # Reshape para (S, 1) para fazer broadcasting pelas colunas N
+    
+    # Cálculo do gamma_l para cada linha
+    gamma_l = 100 + (1/20) * l_indices * np.sqrt(l_indices)
+    
+    # Multiplicação elemento a elemento aproveitando o broadcasting do numpy (g_{l,c} * gamma_l)
+    g_dados_com_ganho = g_dados * gamma_l
+    
+    return g_dados_com_ganho
 
 def salvar_relatorio(id_tarefa, modelo, ganho, tempo_exec, cpu_uso, mem_uso):
     """Gera e atualiza o relatório comparativo de desempenho exigido pelo professor."""
@@ -52,35 +89,26 @@ def processar_cgnr_trabalhador(tarefa):
     """Função executada pelas threads trabalhadoras em segundo plano."""
     id_tarefa = tarefa["id"]
     modelo = tarefa["modelo"]
-    ganho = tarefa["ganho"]
+    ganho = int(tarefa["ganho"])
     sinal_str = tarefa["sinal_data"]
     
-    print(f"\n[TRABALHADOR] Iniciando processamento da Tarefa #{id_tarefa} (Modelo: {modelo}, Ganho: {ganho})...")
+    print(f"\n[TRABALHADOR] Iniciando processamento da Tarefa #{id_tarefa} (Modelo: {modelo}, Ganho: {ganho}(1 ou 0))...")
     
-    # 1. Medição inicial de recursos
     tempo_inicio = time.time()
     cpu_inicial = psutil.cpu_percent(interval=None)
     mem_inicial = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024) 
     
-    # --- ALTERAÇÃO: Execução com mapeamento correto das funções importadas ---
     try:
-        # Seleciona a matriz H certa com base no modelo enviado pelo cliente
         if "30" in modelo:
             H_atual = H_30
         else:
             H_atual = H_60
 
-        # Converte a string de dados de sinal recebida da rede para array do numpy
         g_linhas = [linha.split(';') for linha in sinal_str.strip().split('\n') if linha]
         g_dados = np.array(g_linhas, dtype=np.float64)
 
-        # Aplica o ganho matemático importado
-        g_com_ganho = aplicar_ganho(g_dados)
-
-        # Executa dinamicamente o algoritmo (CGNR ou CGNE)
-        resultado = executar_algoritmo_aleatorio(H_atual, g_com_ganho)
+        resultado = executar_algoritmo_aleatorio(H_atual, g_dados)
         
-        # Reconstrói a resolução e salva a imagem gerada na raiz do servidor
         resolucao = descobrir_resolucao(H_atual)
         nome_imagem = f"imagem_tarefa_{id_tarefa}_{modelo}_{resultado['algoritmo']}.png"
         
@@ -90,7 +118,7 @@ def processar_cgnr_trabalhador(tarefa):
     except Exception as error:
         print(f"[!] Erro ao processar o algoritmo na tarefa #{id_tarefa}: {error}")
     
-    # 2. Medição final de recursos
+    #Medição final
     tempo_fim = time.time()
     tempo_total = tempo_fim - tempo_inicio
     cpu_final = psutil.cpu_percent(interval=None)
@@ -116,6 +144,7 @@ def iniciarServidor():
     print("\n=======================================================")
     print(f"[*] Servidor Python Multi-Thread Ativo na porta {PORTA}")
     print(f"[*] Controle de Saturação: Limite de {MAX_TRABALHADORES} tarefas simultâneas.")
+    print(f"[*] Limite da CPU: {LIMITE_CPU} %")
     print("=======================================================\n")
 
     contador_tarefas = 0
@@ -123,6 +152,20 @@ def iniciarServidor():
     try:
         while True:
             client_socket, addr = server_socket.accept()
+
+            cpu_atual = psutil.cpu_percent(interval=None)
+
+            contador_tarefas += 1 
+            historico_requisicoes.append(contador_tarefas)
+            historico_cpu.append(cpu_atual)
+
+            if cpu_atual >= LIMITE_CPU:
+                print(f"[!] REQUISIÇÃO RECUSADA: CPU em {cpu_atual}%. Servidor temporariamente indisponível.")
+                resposta = "Erro: Servidor sobrecarregado. Tente novamente mais tarde."
+                client_socket.sendall(resposta.encode('utf-8'))
+                client_socket.close()
+                continue
+
             print(f"\n[*] Conexão de rede vinda de {addr[0]}:{addr[1]}")
             
             dados_recebidos = b""
@@ -135,7 +178,7 @@ def iniciarServidor():
             mensagem = dados_recebidos.decode('utf-8')
             
             if mensagem:
-                contador_tarefas += 1
+                # contador_tarefas += 1
                 
                 # Desembrulha o protocolo criado no cliente ("MODELO;GANHO|DADOS_SINAL")
                 try:
@@ -144,21 +187,17 @@ def iniciarServidor():
                 except ValueError:
                     modelo, ganho, sinal_data = "Desconhecido", "0", mensagem
                 
-                # Monta o dicionário da tarefa para colocar na fila
                 tarefa = {
                     "id": contador_tarefas,
                     "modelo": modelo,
                     "ganho": ganho,
                     "sinal_data": sinal_data
                 }
-                
-                fila_de_tarefas.put(tarefa) # Coloca a tarefa na fila de execução
-                
-                posicao_fila = fila_de_tarefas.qsize() # Descobre a posição atual do cliente na fila
-                
+                                
+                posicao_fila = executor._work_queue.qsize() + 1
+
                 print(f"[+] Tarefa #{contador_tarefas} adicionada à fila. Posição atual: {posicao_fila}")
                 
-                # RESPONDE IMEDIATAMENTE AO CLIENTE CONFORME SOLICITADO
                 resposta = f"Recebido! Você está na posição {posicao_fila} da fila."
                 client_socket.sendall(resposta.encode('utf-8'))
                 
@@ -174,4 +213,10 @@ def iniciarServidor():
         server_socket.close()
 
 if __name__ == "__main__":
-    iniciarServidor()
+    try:
+        iniciarServidor()
+    except KeyboardInterrupt:
+        print("\n[!] Instância do servidor interrompida pelo usuário.")
+    finally:
+        print("[*] Garantindo salvamento dos dados analíticos...")
+        gerar_grafico_desempenho()
