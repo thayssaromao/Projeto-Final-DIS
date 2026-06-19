@@ -4,15 +4,6 @@ import random
 from PIL import Image
 import os
 import scipy.sparse as sp
-from MonitorRecursos import MonitorRecursos
-from ControleSaturacao import ControleSaturacao
-
-controle = ControleSaturacao(
-    max_execucoes=2,
-    max_fila=6,
-    limite_cpu=90,
-    limite_memoria=90
-)
 
 def carregar_matriz_esparsa(nome_arquivo):
     cache = nome_arquivo + ".npz"
