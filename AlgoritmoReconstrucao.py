@@ -5,6 +5,12 @@ from PIL import Image
 import os
 import scipy.sparse as sp
 
+PASTA_RESULTADOS = "resultados-relatorio"
+
+
+def garantir_pasta_resultados():
+    os.makedirs(PASTA_RESULTADOS, exist_ok=True)
+
 
 def carregar_matriz_esparsa(nome_arquivo):
     cache = nome_arquivo + ".npz"
@@ -189,6 +195,9 @@ def cgne(H, g, tol=1e-4, max_iter=10):
     }
 
 def salvar_imagem(f, resolucao, nome_arquivo):
+    garantir_pasta_resultados()
+    caminho = os.path.join(PASTA_RESULTADOS, os.path.basename(nome_arquivo))
+
     f = np.asarray(f, dtype=np.float64).reshape(-1)
 
     largura = resolucao
@@ -207,7 +216,7 @@ def salvar_imagem(f, resolucao, nome_arquivo):
     img = img.clip(0, 255).astype(np.uint8)
 
     imagem = Image.fromarray(img, mode="L")
-    imagem.save(nome_arquivo)
+    imagem.save(caminho)
 
 def descobrir_resolucao(H):
     pixels = H.shape[1]
@@ -263,15 +272,16 @@ def executar_algoritmo_aleatorio(H, g):
 if __name__ == "__main__":
     resolucao_desejada = 60
     algoritmo = "CGNR"
+    versao_teste = 1
 
     print("Carregando H e g...")
 
     if resolucao_desejada == 60:
         H = carregar_matriz_esparsa("Cgnr/sinais/H-1.csv")
-        g = carregar_csv("Cgnr/sinais/G-1.csv")
+        g = carregar_csv(f"Cgnr/sinais/G-{versao_teste}.csv")
     elif resolucao_desejada == 30:
         H = carregar_matriz_esparsa("Cgnr/sinais/H-2.csv")
-        g = carregar_csv("Cgnr/sinais/G-1.csv")
+        g = carregar_csv(f"Cgnr/sinais/g-30x30-{versao_teste}.csv")
     else:
         raise ValueError("Resolução inválida. Use 30 ou 60.")
 
@@ -305,5 +315,5 @@ if __name__ == "__main__":
     print("Iterações:", resultado["iteracoes"])
     print("Erro:", resultado["erro"])
     print("Lambda:", resultado["lambda"])
-    print("Imagem salva em:", nome_imagem)
+    print("Imagem salva em:", os.path.join(PASTA_RESULTADOS, nome_imagem))
     print("Finalizado.")
