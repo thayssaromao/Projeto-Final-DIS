@@ -25,7 +25,7 @@ public class ServidorJava {
     private static final int MAX_TRABALHADORES = 8;
     private static final double LIMITE_CPU = 96.0;
 
-    private static final String PASTA_RESULTADOS = "resultados-relatorio";
+    private static final String PASTA_RESULTADOS = AlgoritmoReconstrucao.PASTA_RESULTADOS;
 
     private static final String RESET = "\u001B[0m";
     private static final String COR_TRABALHADOR = "\u001B[96m";
@@ -239,6 +239,9 @@ public class ServidorJava {
     ) throws IOException {
         Path caminhoImagem = Paths.get(PASTA_RESULTADOS, nomeImagem);
 
+        System.out.println("[DEBUG] Caminho da imagem: " + caminhoImagem.toAbsolutePath());
+        System.out.println("[DEBUG] Imagem existe? " + Files.exists(caminhoImagem));
+
         byte[] bytesImagem = Files.readAllBytes(caminhoImagem);
         String imagemB64 = Base64.getEncoder().encodeToString(bytesImagem);
 
@@ -391,7 +394,15 @@ public class ServidorJava {
 
             enviarRespostaCliente(tarefa.socket, resposta);
         } catch (IOException e) {
-            enviarRespostaCliente(tarefa.socket, "ERRO|id_tarefa=" + tarefa.id + ";mensagem=" + e.getMessage());
+            logTrabalhador(
+                    "Erro ao montar resposta da Tarefa #" + tarefa.id + ": " + e.getMessage(),
+                    true
+            );
+
+            enviarRespostaCliente(
+                    tarefa.socket,
+                    "ERRO|id_tarefa=" + tarefa.id + ";mensagem=" + e.getMessage()
+            );
         }
     }
 
@@ -516,100 +527,101 @@ public class ServidorJava {
     }
 
     public static void iniciarServidor() {
-        executor = new ThreadPoolExecutor(
-                MAX_TRABALHADORES,
-                MAX_TRABALHADORES,
-                0L,
-                TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>()
-        );
+    executor = new ThreadPoolExecutor(
+            MAX_TRABALHADORES,
+            MAX_TRABALHADORES,
+            0L,
+            TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>()
+    );
 
-        try (ServerSocket serverSocket = new ServerSocket()) {
-            serverSocket.setReuseAddress(true);
-            serverSocket.bind(new InetSocketAddress(HOST, PORTA), 10);
+    try (ServerSocket serverSocket = new ServerSocket()) {
+        serverSocket.setReuseAddress(true);
+        serverSocket.bind(new InetSocketAddress(HOST, PORTA), 10);
 
-            System.out.println("\n===================================================");
-            System.out.println("[*] Servidor Java Multi-Thread Ativo na porta " + PORTA);
-            System.out.println("[*] Controle de Saturação: Limite de " + MAX_TRABALHADORES + " tarefas simultâneas.");
-            System.out.println("[*] Limite da CPU: " + LIMITE_CPU + " %");
-            System.out.println("=====================================================\n");
+        System.out.println("\n===================================================");
+        System.out.println("[*] Servidor Java Multi-Thread Ativo na porta " + PORTA);
+        System.out.println("[*] Controle de Saturação: Limite de " + MAX_TRABALHADORES + " tarefas simultâneas.");
+        System.out.println("[*] Limite da CPU: " + LIMITE_CPU + " %");
+        System.out.println("=====================================================\n");
 
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
+        while (true) {
+            Socket clientSocket = serverSocket.accept();
 
-                double cpuAtual = medirCpuPercentual();
+            System.out.println("\n[*] Conexão de rede vinda de " +
+                    clientSocket.getInetAddress().getHostAddress() + ":" + clientSocket.getPort());
 
-                contadorTarefas++;
-                historicoRequisicoes.add(contadorTarefas);
-                historicoCpu.add(cpuAtual);
+            String mensagem = receberPayload(clientSocket);
 
-                if (cpuAtual >= LIMITE_CPU) {
-                    System.out.println("[!] REQUISIÇÃO RECUSADA: CPU em " + cpuAtual + "%. Servidor temporariamente indisponível.");
+            double cpuAtual = medirCpuPercentual();
 
-                    OutputStream saida = clientSocket.getOutputStream();
-                    saida.write("Erro: Servidor sobrecarregado. Tente novamente mais tarde.".getBytes(StandardCharsets.UTF_8));
-                    saida.flush();
-                    clientSocket.close();
-                    continue;
-                }
+            contadorTarefas++;
+            historicoRequisicoes.add(contadorTarefas);
+            historicoCpu.add(cpuAtual);
 
-                System.out.println("\n[*] Conexão de rede vinda de " +
-                        clientSocket.getInetAddress().getHostAddress() + ":" + clientSocket.getPort());
+            if (cpuAtual >= LIMITE_CPU) {
+                System.out.println("[!] REQUISIÇÃO RECUSADA: CPU em " + cpuAtual + "%. Servidor temporariamente indisponível.");
 
-                String mensagem = receberPayload(clientSocket);
+                enviarRespostaCliente(
+                        clientSocket,
+                        "ERRO|id_tarefa=" + contadorTarefas +
+                        ";mensagem=Servidor sobrecarregado. Tente novamente mais tarde.;cpu=" + cpuAtual
+                );
 
-                if (!mensagem.isEmpty()) {
-                    String modelo;
-                    String ganhoTexto;
-                    String sinalData;
-
-                    try {
-                        String[] partesPayload = mensagem.split("\\|", 2);
-                        String cabecalho = partesPayload[0];
-                        sinalData = partesPayload[1];
-
-                        String[] partesCabecalho = cabecalho.split(";", 2);
-                        modelo = partesCabecalho[0];
-                        ganhoTexto = partesCabecalho[1];
-                    } catch (Exception e) {
-                        modelo = "Desconhecido";
-                        ganhoTexto = "0";
-                        sinalData = mensagem;
-                    }
-
-                    int ganho;
-
-                    try {
-                        ganho = Integer.parseInt(ganhoTexto.trim());
-                    } catch (NumberFormatException e) {
-                        ganho = 0;
-                    }
-
-                    Tarefa tarefa = new Tarefa(
-                            contadorTarefas,
-                            modelo,
-                            ganho,
-                            sinalData,
-                            clientSocket
-                    );
-
-                    int posicaoFila = executor.getQueue().size() + 1;
-
-                    System.out.println("[+] Tarefa #" + contadorTarefas +
-                            " adicionada à fila. Posição atual: " + posicaoFila);
-
-                    executor.submit(() -> processarTarefa(tarefa));
-                } else {
-                    clientSocket.close();
-                }
+                continue;
             }
 
-        } catch (IOException e) {
-            System.out.println("[!] Erro no servidor: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
+            if (!mensagem.isEmpty()) {
+                String modelo;
+                String ganhoTexto;
+                String sinalData;
 
+                try {
+                    String[] partesPayload = mensagem.split("\\|", 2);
+                    String cabecalho = partesPayload[0];
+                    sinalData = partesPayload[1];
+
+                    String[] partesCabecalho = cabecalho.split(";", 2);
+                    modelo = partesCabecalho[0];
+                    ganhoTexto = partesCabecalho[1];
+                } catch (Exception e) {
+                    modelo = "Desconhecido";
+                    ganhoTexto = "0";
+                    sinalData = mensagem;
+                }
+
+                int ganho;
+
+                try {
+                    ganho = Integer.parseInt(ganhoTexto.trim());
+                } catch (NumberFormatException e) {
+                    ganho = 0;
+                }
+
+                Tarefa tarefa = new Tarefa(
+                        contadorTarefas,
+                        modelo,
+                        ganho,
+                        sinalData,
+                        clientSocket
+                );
+
+                int posicaoFila = executor.getQueue().size() + 1;
+
+                System.out.println("[+] Tarefa #" + contadorTarefas +
+                        " adicionada à fila. Posição atual: " + posicaoFila);
+
+                executor.submit(() -> processarTarefa(tarefa));
+            } else {
+                clientSocket.close();
+            }
+        }
+
+    } catch (IOException e) {
+        System.out.println("[!] Erro no servidor: " + e.getMessage());
+        e.printStackTrace();
+    }
+}
     public static void main(String[] args) {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("\n[*] Garantindo salvamento dos dados analíticos...");
