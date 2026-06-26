@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 HOST = '127.0.0.1'
 PORTA = 8000
-REQUISICOES = 100
+REQUISICOES = 200
 PASTA_RESULTADOS = "resultados-relatorio"
 RESET = "\033[0m"
 COR_CLIENTE = "\033[95m" 
