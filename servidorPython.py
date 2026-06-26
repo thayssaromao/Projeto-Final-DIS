@@ -25,7 +25,7 @@ from AlgoritmoReconstrucao import (
 
 HOST = '127.0.0.1'
 PORTA = 8000
-MAX_TRABALHADORES = 2  # Limite estrito de threads calculando CGNR simultaneamente, este número precisa ser similar ao número de núcleos físicos da CPU
+MAX_TRABALHADORES = 8  # Limite estrito de threads calculando CGNR simultaneamente, este número precisa ser similar ao número de núcleos físicos da CPU
 LIMITE_CPU = 96.0
 
 RESET = "\033[0m"

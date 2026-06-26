@@ -6,7 +6,7 @@ import java.util.Random;
 
 public class AlgoritmoReconstrucao {
 
-    private static final String PASTA_RESULTADOS = "resultados-relatorio";
+    private static final String PASTA_RESULTADOS = "resultados-relatorio-Java";
 
     private static void garantirPastaResultados() {
         File pasta = new File(PASTA_RESULTADOS);

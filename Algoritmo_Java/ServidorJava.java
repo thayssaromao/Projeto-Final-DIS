@@ -22,7 +22,7 @@ public class ServidorJava {
     private static final int PORTA = 8000;
 
     private static final int TAM_BUFFER = 4096;
-    private static final int MAX_TRABALHADORES = 2;
+    private static final int MAX_TRABALHADORES = 8;
     private static final double LIMITE_CPU = 96.0;
 
     private static final String PASTA_RESULTADOS = "resultados-relatorio";
