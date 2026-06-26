@@ -86,7 +86,7 @@ public class ServidorJava {
     }
 
     private static double medirCpuPercentual() {
-        double carga = sistema.getSystemCpuLoad();
+        double carga = sistema.getCpuLoad();
 
         if (carga < 0.0) {
             return 0.0;
@@ -347,7 +347,7 @@ public class ServidorJava {
                         Locale.US,
                         "Imagem salva em '%s/%s' usando %s em %d iterações | " +
                                 "Tempo total: %.2fs | Tempo algoritmo: %.4fs | " +
-                                "Erro: %.6e | λ: %.6e | CPU: %.1f%% | Memória: %.1f MB | " +
+                                "Erro: %.6e | λ(lambda): %.6e | CPU: %.1f%% | Memória: %.1f MB | " +
                                 "Resolução: %dx%d | Modelo: %s | Ganho: %d",
                         PASTA_RESULTADOS,
                         nomeImagem,

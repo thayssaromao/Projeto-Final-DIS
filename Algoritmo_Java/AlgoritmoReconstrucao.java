@@ -240,7 +240,79 @@ public class AlgoritmoReconstrucao {
 
         return resultado;
     }
+    public static double[][] carregarCsvMatriz(String nomeArquivo) throws IOException {
+        System.out.println("Lendo CSV como matriz " + nomeArquivo + "...");
 
+        java.util.ArrayList<double[]> linhas = new java.util.ArrayList<>();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(nomeArquivo))) {
+            String linha;
+
+            while ((linha = br.readLine()) != null) {
+                linha = linha.trim();
+
+                if (linha.isEmpty()) {
+                    continue;
+                }
+
+                String[] partes = linha.split("[,;]");
+                double[] valores = new double[partes.length];
+
+                for (int i = 0; i < partes.length; i++) {
+                    valores[i] = Double.parseDouble(partes[i].trim());
+                }
+
+                linhas.add(valores);
+            }
+        }
+
+        return linhas.toArray(new double[0][]);
+    }
+
+    public static double[][] aplicarGanhoSinal(double[][] gDados) {
+        int S = gDados.length;
+
+        if (S == 0) {
+            return gDados;
+        }
+
+        int N = gDados[0].length;
+
+        System.out.println("Aplicando ganho no sinal: " + S + "x" + N);
+
+        double[][] resultado = new double[S][N];
+
+        for (int l = 0; l < S; l++) {
+            int indiceL = l + 1;
+
+            double gamma = 100.0 + (1.0 / 20.0) * indiceL * Math.sqrt(indiceL);
+
+            for (int c = 0; c < N; c++) {
+                resultado[l][c] = gDados[l][c] * gamma;
+            }
+        }
+
+        return resultado;
+    }
+
+    public static double[] achatarMatriz(double[][] matriz) {
+        int total = 0;
+
+        for (double[] linha : matriz) {
+            total += linha.length;
+        }
+
+        double[] vetor = new double[total];
+        int pos = 0;
+
+        for (double[] linha : matriz) {
+            for (double valor : linha) {
+                vetor[pos++] = valor;
+            }
+        }
+
+        return vetor;
+    }
     public static double[] parseSinalRecebido(String sinalData) {
         String[] partes = sinalData.split("[,;\\r\\n]+");
 
@@ -570,20 +642,30 @@ public class AlgoritmoReconstrucao {
             int resolucaoDesejada = 60;
             String algoritmo = "CGNR";
             int versaoTeste = 1;
+            boolean usarGanho = false;
 
             System.out.println("Carregando H e g...");
 
             MatrizEsparsa H;
             double[] g;
 
+            String caminhoG;
+
             if (resolucaoDesejada == 60) {
                 H = carregarMatrizEsparsa("Cgnr/sinais/H-1.csv");
-                g = carregarCsv("Cgnr/sinais/G-" + versaoTeste + ".csv");
+                caminhoG = "Cgnr/sinais/G-" + versaoTeste + ".csv";
             } else if (resolucaoDesejada == 30) {
                 H = carregarMatrizEsparsa("Cgnr/sinais/H-2.csv");
-                g = carregarCsv("Cgnr/sinais/g-30x30-" + versaoTeste + ".csv");
+                caminhoG =  "Cgnr/sinais/g-30x30-" + versaoTeste + ".csv";
             } else {
                 throw new IllegalArgumentException("Algoritmo inválido. Use CGNR ou CGNE.");
+            }
+            if (usarGanho) {
+                double[][] gMatriz = carregarCsvMatriz(caminhoG);
+                gMatriz = aplicarGanhoSinal(gMatriz);
+                g = achatarMatriz(gMatriz);
+            } else {
+                g = carregarCsv(caminhoG);
             }
 
             int resolucao = descobrirResolucao(H);
@@ -609,7 +691,12 @@ public class AlgoritmoReconstrucao {
             long fimTotal = System.nanoTime();
             double tempoTotal = (fimTotal - inicioTotal) / 1_000_000_000.0;
 
-            String nomeImagem = "imagem_reconstruida_" + resolucao + "x" + resolucao + "_" + algoritmo + ".png";
+            String nomeImagem = "imagem_reconstruida_" 
+                + resolucao + "x" + resolucao 
+                + "_" + algoritmo 
+                + "_teste" + versaoTeste
+                + "_ganho" + (usarGanho ? "1" : "0")
+                + ".png";
 
             salvarImagem(resultado.f, resolucao, nomeImagem);
 
